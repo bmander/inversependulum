@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Inverse Pendulum on a Cart Simulation</title>
+<style>
+  body { margin: 0; }
+  canvas { display: block; margin: 20px auto; border: 1px solid #ccc; cursor: default; }
+  #controls { text-align: center; margin-top: 10px; }
+  .param-input { margin: 5px; }
+  label { margin-right: 5px; }
+  #error-display { margin-top: 15px; }
+  #error-display div { margin: 5px 0; }
+</style>
+</head>
+<body>
+
+  <canvas id="myCanvas"></canvas>
+
+  <div id="controls">
+    <div class="param-input">
+      <label for="cartMass">Cart Mass (kg):</label>
+      <input type="number" id="cartMass" value="1.0" step="0.1">
+    </div>
+    <div class="param-input">
+      <label for="pendulumMass">Pendulum Mass (kg):</label>
+      <input type="number" id="pendulumMass" value="0.1" step="0.01">
+    </div>
+    <div class="param-input">
+      <label for="pendulumLength">Pendulum Length (m):</label>
+      <input type="number" id="pendulumLength" value="1.0" step="0.1">
+    </div>
+    <div class="param-input">
+      <label for="force">Base Force (N):</label>
+      <input type="range" id="force" min="-50" max="50" value="0" step="1">
+      <span id="forceValue">0</span>
+    </div>
+
+    <hr style="width: 80%; margin: 15px auto;">
+
+    <h3>Pendulum Angle PID</h3>
+    <div class="param-input">
+      <label for="angleKp">Kp:</label>
+      <input type="number" id="angleKp" value="100" step="1">
+    </div>
+    <div class="param-input">
+      <label for="angleKi">Ki:</label>
+      <input type="number" id="angleKi" value="0.1" step="0.01">
+    </div>
+    <div class="param-input">
+      <label for="angleKd">Kd:</label>
+      <input type="number" id="angleKd" value="10" step="0.1">
+    </div>
+    <div class="param-input">
+      <label for="setpointAngle">Setpoint Angle (rad):</label>
+      <input type="number" id="setpointAngle" value="0" step="0.01">
+    </div>
+
+    <hr style="width: 80%; margin: 15px auto;">
+
+    <h3>Cart Position PID</h3>
+    <div class="param-input">
+      <label for="positionKp">Kp:</label>
+      <input type="number" id="positionKp" value="8.5" step="0.1">
+    </div>
+    <div class="param-input">
+      <label for="positionKi">Ki:</label>
+      <input type="number" id="positionKi" value="0.01" step="0.001">
+    </div>
+    <div class="param-input">
+      <label for="positionKd">Kd:</label>
+      <input type="number" id="positionKd" value="2.8" step="0.01">
+    </div>
+    <div class="param-input">
+      <label for="setpointPosition">Setpoint Position (m):</label>
+      <input type="number" id="setpointPosition" value="0" step="0.01">
+    </div>
+
+    <hr style="width: 80%; margin: 15px auto;">
+
+    <div class="param-input">
+      <input type="checkbox" id="enablePID">
+      <label for="enablePID">Enable PID Controllers</label>
+    </div>
+    <button id="resetButton">Reset State</button>
+  </div>
+
+  <div id="error-display">
+    <div>Cart Position Error: <span id="cartPositionError">0.00</span> m</div>
+    <div>Pendulum Angle Error: <span id="pendulumAngleError">0.00</span> rad</div>
+  </div>
+
+  <script>
+    const canvas = document.getElementById('myCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = 600;
+    canvas.height = 400;
+
+    // Get references to parameter input elements
+    const cartMassInput = document.getElementById('cartMass');
+    const pendulumMassInput = document.getElementById('pendulumMass');
+    const pendulumLengthInput = document.getElementById('pendulumLength');
+
+    const forceInput = document.getElementById('force');
+    const forceValueDisplay = document.getElementById('forceValue');
+
+    // Angle PID inputs
+    const angleKpInput = document.getElementById('angleKp');
+    const angleKiInput = document.getElementById('angleKi');
+    const angleKdInput = document.getElementById('angleKd');
+    const setpointAngleInput = document.getElementById('setpointAngle');
+
+    // Position PID inputs
+    const positionKpInput = document.getElementById('positionKp');
+    const positionKiInput = document.getElementById('positionKi');
+    const positionKdInput = document.getElementById('positionKd');
+    const setpointPositionInput = document.getElementById('setpointPosition');
+
+    const enablePIDCheckbox = document.getElementById('enablePID');
+
+    // Get references to error display elements
+    const cartPositionErrorDisplay = document.getElementById('cartPositionError');
+    const pendulumAngleErrorDisplay = document.getElementById('pendulumAngleError');
+
+    // Get reference to the reset button
+    const resetButton = document.getElementById('resetButton');
+
+    forceInput.addEventListener('input', function() {
+      forceValueDisplay.textContent = forceInput.value;
+    });
+
+    class PendulumSystem {
+      constructor() {
+        this.M = parseFloat(cartMassInput.value);
+        this.m = parseFloat(pendulumMassInput.value);
+        this.l = parseFloat(pendulumLengthInput.value);
+        this.g = 9.81;
+        this.resetState();
+      }
+
+      updateParameters() {
+        this.M = parseFloat(cartMassInput.value);
+        this.m = parseFloat(pendulumMassInput.value);
+        this.l = parseFloat(pendulumLengthInput.value);
+      }
+
+      getState() {
+        return [this.x1, this.x2, this.x3, this.x4];
+      }
+
+      setState(state) {
+        this.x1 = state[0];
+        this.x2 = state[1];
+        this.x3 = state[2];
+        this.x4 = state[3];
+      }
+
+      resetState() {
+        this.x1 = 0;
+        this.x2 = 0;
+        this.x3 = 0;
+        this.x4 = 0;
+      }
+
+      stateDerivative(F) {
+        const [x1, x2, x3, x4] = this.getState();
+        const sin_x3 = Math.sin(x3);
+        const cos_x3 = Math.cos(x3);
+
+        const x1_dot = x2;
+        const x2_dot = (F - this.m * this.g * sin_x3 * cos_x3 + this.m * this.l * x4 * x4 * sin_x3) / (this.M + this.m * sin_x3 * sin_x3);
+        const x3_dot = x4;
+        const x4_dot = ((this.M + this.m) * this.g * sin_x3 - F * cos_x3 - this.m * this.l * x4 * x4 * sin_x3 * cos_x3) / (this.l * (this.M + this.m * sin_x3 * sin_x3));
+
+        return [x1_dot, x2_dot, x3_dot, x4_dot];
+      }
+    }
+
+    class PIDController {
+      constructor(kpInput, kiInput, kdInput, setpointInput) {
+        this.kpInput = kpInput;
+        this.kiInput = kiInput;
+        this.kdInput = kdInput;
+        this.setpointInput = setpointInput;
+        this.integral = 0;
+        this.previousError = 0;
+      }
+
+      updateParameters() {
+        this.kp = parseFloat(this.kpInput.value);
+        this.ki = parseFloat(this.kiInput.value);
+        this.kd = parseFloat(this.kdInput.value);
+        this.setpoint = parseFloat(this.setpointInput.value);
+      }
+
+      resetIntegral() {
+        this.integral = 0;
+        this.previousError = 0;
+      }
+
+      calculateOutput(currentValue, dt) {
+        const error = this.setpoint - currentValue;
+        this.integral += error * dt;
+        const derivative = (error - this.previousError) / dt;
+        this.previousError = error;
+
+        return this.kp * error + this.ki * this.integral + this.kd * derivative;
+      }
+    }
+
+    const pendulum = new PendulumSystem();
+    const anglePID = new PIDController(angleKpInput, angleKiInput, angleKdInput, setpointAngleInput);
+    const positionPID = new PIDController(positionKpInput, positionKiInput, positionKdInput, setpointPositionInput);
+    const dt = 0.01;
+    const scale = 100;
+
+    // Update parameters on input change
+    cartMassInput.addEventListener('change', () => pendulum.updateParameters());
+    pendulumMassInput.addEventListener('change', () => pendulum.updateParameters());
+    pendulumLengthInput.addEventListener('change', () => pendulum.updateParameters());
+    angleKpInput.addEventListener('change', () => anglePID.updateParameters());
+    angleKiInput.addEventListener('change', () => anglePID.updateParameters());
+    angleKdInput.addEventListener('change', () => anglePID.updateParameters());
+    setpointAngleInput.addEventListener('change', () => anglePID.updateParameters());
+    positionKpInput.addEventListener('change', () => positionPID.updateParameters());
+    positionKiInput.addEventListener('change', () => positionPID.updateParameters());
+    positionKdInput.addEventListener('change', () => positionPID.updateParameters());
+    setpointPositionInput.addEventListener('change', () => positionPID.updateParameters());
+
+    // Reset state functionality
+    resetButton.addEventListener('click', () => {
+      pendulum.resetState();
+      anglePID.resetIntegral();
+      positionPID.resetIntegral();
+    });
+
+    // Dragging functionality
+    let isDragging = false;
+    let mouseX = 0;
+    let mouseY = 0;
+    const k = 0.5; // Spring constant for the dragging force
+
+    canvas.addEventListener('mousedown', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const canvasMouseX = e.clientX - rect.left;
+      const canvasMouseY = e.clientY - rect.top;
+      const cartWidth = 80;
+      const cartHeight = 40;
+      const [x1] = pendulum.getState();
+      const cartY = canvas.height - 50 - cartHeight / 2;
+      const cartXPixel = canvas.width / 2 + x1 * scale - cartWidth / 2;
+
+      if (canvasMouseX >= cartXPixel && canvasMouseX <= cartXPixel + cartWidth &&
+          canvasMouseY >= cartY - cartHeight / 2 && canvasMouseY <= cartY + cartHeight / 2) {
+        isDragging = true;
+        canvas.style.cursor = 'grabbing';
+      }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      mouseX = e.clientX - rect.left;
+      mouseY = e.clientY - rect.top;
+    });
+
+    canvas.addEventListener('mouseup', () => {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+    });
+
+    canvas.addEventListener('mouseout', () => {
+      isDragging = false;
+      canvas.style.cursor = 'default';
+    });
+
+    function simulate() {
+      const baseForce = parseFloat(forceInput.value);
+      let draggingForce = 0;
+      let totalPIDForce = 0;
+
+      if (enablePIDCheckbox.checked) {
+        const [currentPosition, , currentAngle,] = pendulum.getState();
+        anglePID.updateParameters();
+        positionPID.updateParameters();
+
+        const angleError = anglePID.setpoint - currentAngle;
+        const positionError = positionPID.setpoint - currentPosition;
+
+        const angleControl = anglePID.calculateOutput(currentAngle, dt);
+        const positionControl = positionPID.calculateOutput(currentPosition, dt);
+
+        totalPIDForce = angleControl + positionControl;
+
+        // Calculate and display errors
+        cartPositionErrorDisplay.textContent = positionError.toFixed(2);
+        pendulumAngleErrorDisplay.textContent = angleError.toFixed(2);
+      } else {
+        cartPositionErrorDisplay.textContent = 'N/A';
+        pendulumAngleErrorDisplay.textContent = 'N/A';
+      }
+
+      if (isDragging) {
+        const cartWidth = 80;
+        const [x1] = pendulum.getState();
+        const cartXPixel = canvas.width / 2 + x1 * scale; // Center of the cart
+        draggingForce = k * (mouseX - cartXPixel);
+      }
+
+      const totalForce = baseForce + draggingForce - totalPIDForce;
+      const currentState = pendulum.getState();
+      const derivatives = pendulum.stateDerivative(totalForce);
+
+      // Update state
+      const newState = currentState.map((val, i) => val + derivatives[i] * dt);
+      pendulum.setState(newState);
+
+      // Keep angle within -PI to PI for better visualization and PID
+      let [,,x3,] = pendulum.getState();
+      if (x3 > Math.PI) {
+        x3 -= 2 * Math.PI;
+        anglePID.previousError += 2 * Math.PI; // Adjust integral term to prevent windup
+      }
+      if (x3 < -Math.PI) {
+        x3 += 2 * Math.PI;
+        anglePID.previousError -= 2 * Math.PI; // Adjust integral term to prevent windup
+      }
+      pendulum.setState([newState[0], newState[1], x3, newState[3]]);
+
+      draw();
+      requestAnimationFrame(simulate);
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      // Draw the ground
+      ctx.beginPath();
+      ctx.moveTo(0, canvas.height - 50);
+      ctx.lineTo(canvas.width, canvas.height - 50);
+      ctx.stroke();
+
+      // Cart dimensions (ensure these are consistent)
+      const cartWidth = 80;
+      const cartHeight = 40;
+      const [x1] = pendulum.getState();
+      const cartY = canvas.height - 50 - cartHeight / 2;
+      const cartXPixel = canvas.width / 2 + x1 * scale - cartWidth / 2;
+
+      // Draw the cart
+      ctx.fillStyle = 'brown';
+      ctx.fillRect(cartXPixel, cartY - cartHeight / 2, cartWidth, cartHeight);
+
+      // Pendulum pivot point
+      const pivotX = cartXPixel + cartWidth / 2;
+      const pivotY = cartY - cartHeight / 2;
+
+      // Pendulum bob position
+      const [,,x3,] = pendulum.getState();
+      const bobX = pivotX + pendulum.l * scale * Math.sin(x3);
+      const bobY = pivotY - pendulum.l * scale * Math.cos(x3);
+
+      // Draw the pendulum rod
+      ctx.beginPath();
+      ctx.moveTo(pivotX, pivotY);
+      ctx.lineTo(bobX, bobY);
+      ctx.stroke();
+
+      // Draw the pendulum bob
+      ctx.beginPath();
+      ctx.arc(bobX, bobY, 10, 0, 2 * Math.PI);
+      ctx.fillStyle = 'blue';
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Initialize parameters on page load
+    pendulum.updateParameters();
+    anglePID.updateParameters();
+    positionPID.updateParameters();
+
+    // Start the simulation
+    simulate();
+  </script>
+
+</body>
+</html>
