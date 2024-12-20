@@ -13,32 +13,34 @@ The initial goal was to derive the equations of motion for an inverse pendulum o
 
 Given the generalized coordinates *x* (cart position) and *θ* (pendulum angle from the upward vertical), and system parameters *M* (cart mass), *m* (pendulum mass), and *l* (pendulum length), the Lagrangian was formulated as:
 
-```
-L = (1/2) * (M + m) * ẋ² + (1/2) * m * l² θ̇² + m * l * ẋ * θ̇ * cos(θ) - m * g * l * cos(θ)
-```
+$`L = \frac{1}{2} (M + m) \dot{x}^2 + \frac{1}{2} m l^2 \dot{\theta}^2 + m l \dot{x} \dot{\theta} \cos(\theta) - m g l \cos(\theta)`$
 
 Applying Lagrange's equations yielded the following equations of motion (with an external force *F* on the cart):
 
-* **Cart Equation:**  `(M + m) * ẍ + m * l * θ̈ * cos(θ) - m * l * θ̇² * sin(θ) = F`
-* **Pendulum Equation:** `l * θ̈ + ẍ * cos(θ) - g * sin(θ) = 0`
+* **Cart Equation:**  $`(M + m) \ddot{x} + m l \ddot{\theta} \cos(\theta) - m l \dot{\theta}^2 \sin(\theta) = F`$
+* **Pendulum Equation:** $`l \ddot{\theta} + \ddot{x} \cos(\theta) - g \sin(\theta) = 0`$
 
 **3. State-Space Formulation:**
 
 The Lagrangian equations of motion were then converted into a state-space representation for simulation purposes. The state variables were defined as:
 
-* x₁ = *x* (cart position)
-* x₂ = ẋ (cart velocity)
-* x₃ = *θ* (pendulum angle)
-* x₄ = θ̇ (pendulum angular velocity)
+* $x_1 = x$ (cart position)
+* $x_2 = \dot{x}$ (cart velocity)
+* $x_3 = \theta$ (pendulum angle)
+* $x_4 = \dot{\theta}$ (pendulum angular velocity)
 
 This resulted in a set of non-linear first-order differential equations that describe the system's dynamics:
 
-```
-d/dt [x₁]   [ x₂                                                                                                   ]
-d/dt [x₂] = [ (F - m * g * sin(x₃) * cos(x₃) + m * l * x₄² * sin(x₃)) / (M + m * sin²(x₃))                           ]
-d/dt [x₃]   [ x₄                                                                                                   ]
-d/dt [x₄]   [ ((M + m) * g * sin(x₃) - F * cos(x₃) - ml * x₄² * sin(x₃) * cos(x₃)) / (l * (M + m * sin²(x₃))) ]
-```
+$`
+\begin{equation}
+\frac{d}{dt} \begin{bmatrix} x_1 \\ x_2 \\ x_3 \\ x_4 \end{bmatrix} = \begin{bmatrix}
+x_2 \\
+\frac{F - m g \sin(x_3) \cos(x_3) + m l x_4^2 \sin(x_3)}{M + m \sin^2(x_3)} \\
+x_4 \\
+\frac{(M + m) g \sin(x_3) - F \cos(x_3) - ml x_4^2 \sin(x_3) \cos(x_3)}{l (M + m \sin^2(x_3))}
+\end{bmatrix}
+\end{equation}
+`$
 
 **4. Current Goals Informing the Code:**
 
